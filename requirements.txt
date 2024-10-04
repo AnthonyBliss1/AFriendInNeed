@@ -1,0 +1,4 @@
+PyPokerEngine
+openai
+PySide6
+anthropic
