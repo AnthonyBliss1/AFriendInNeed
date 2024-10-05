@@ -52,13 +52,15 @@ def setup_players(config):
         personality_description=gpt_personality,
         display_name="4o"
     )
+    gpt_agent.is_event_handler = True  # Set only the GPT agent as the event handler
+
     claude_opus_agent = ClaudePokerAgent(
         model_name="claude-3-opus-20240229",
         personality_description=claude_opus_personality,
         display_name="Opus"
     )
     claude_sonnet_agent = ClaudeSonnet35PokerAgent(
-        model_name="claude-3-5-sonnet-20240620",
+        model_name="claude-3-sonnet-20240229",
         personality_description=claude_sonnet_personality,
         display_name="Sonnet"
     )
@@ -93,7 +95,7 @@ def main():
             wrapped_config,
             verbose=1
         )
-        gui.gui_queue.put(('game_state', {
+        gui_queue.put(('game_state', {
             'event': 'game_over',
             'game_result': game_result
         }))
