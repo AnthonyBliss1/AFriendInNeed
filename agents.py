@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 import time
 import anthropic
 from openai import OpenAI
-
 from poker_game import broadcast_chat_message, gui_queue, uuid_to_player_name
 
 load_dotenv()
@@ -28,15 +27,15 @@ class ModelPokerAgent(BasePokerPlayer):
 
         action, amount = self.get_action_from_model(valid_actions, hole_card, round_state)
 
-        if self.decide_to_chat(round_state):
-            message = self.send_chat_message(round_state, action, amount)
-
         self.game_memory.append({
             'action': action,
             'amount': amount,
             'state': round_state,
             'hole_card': hole_card
         })
+
+        # Consider chatting after taking an action
+        self.consider_chatting(round_state, action, amount)
 
         return action, amount
 
@@ -53,10 +52,9 @@ class ModelPokerAgent(BasePokerPlayer):
 
     def send_chat_message(self, round_state, action, amount):
         prompt = self.create_chat_prompt(round_state, action, amount)
-        message = self.get_chat_response(prompt)
+        message = self.get_chat_response(prompt, round_state)  # Add round_state here
         self.chat_history.append(f"{self.display_name}: {message}")
 
-        broadcast_chat_message(self.display_name, message)
         return message
 
     def create_chat_prompt(self, round_state, action, amount):
@@ -64,20 +62,18 @@ class ModelPokerAgent(BasePokerPlayer):
         prompt = f"""
 {self.personality_description}
 You are playing Texas Hold'em poker.
-You take the action: {action_str}
 Current round state: {round_state}
 Recent chat history:
 {self.get_recent_chat_history()}
 
-Based on your personality and the action you take, generate a short chat message (1-2 sentences) to engage with the other players. 
+Based on your personality and the current game state, generate a short chat message (1-2 sentences) to engage with the other players. 
 Talk to them and respond to their chat. Refer to them by name.
-Make sure your message is consistent with the action you took.
 """
         return prompt.strip()
 
-    def get_chat_response(self, prompt):
-
-        pass
+    def get_chat_response(self, prompt, round_state):
+        # This method should be overridden by subclasses
+        raise NotImplementedError("Subclasses must implement get_chat_response")
 
     def get_action_from_model(self, valid_actions, hole_card, round_state):
         
@@ -132,6 +128,17 @@ Make sure your message is consistent with the action you took.
             'display_name': self.display_name
         }))
 
+    def consider_chatting(self, round_state, action, amount):
+        # Reduced chance to chat immediately after an action
+        if action:
+            chat_chance = 0.3  # 30% chance to chat after an action
+        else:
+            chat_chance = 0.4  # 40% chance to chat at other times
+
+        if random.random() < chat_chance:
+            message = self.send_chat_message(round_state, action, amount)
+            broadcast_chat_message(self.display_name, message)
+
 
 # gpt-4o
 class GPT4PokerAgent(ModelPokerAgent):
@@ -139,12 +146,12 @@ class GPT4PokerAgent(ModelPokerAgent):
         super().__init__(model_name, personality_description, display_name)
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    def get_chat_response(self, prompt):
+    def get_chat_response(self, prompt, round_state):
         completion = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": f"{self.personality_description} Respond with a brief message (1-2 sentences max)."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": f"Game state: {round_state}\n\n{prompt}"}
             ],
             max_tokens=50
         )
@@ -262,18 +269,18 @@ Respond with one of the valid actions and an amount if necessary.
 
 # claude opus
 class ClaudePokerAgent(ModelPokerAgent):
-    def get_chat_response(self, prompt):
-        response = self.call_claude_api(prompt, model=self.model_name)
+    def get_chat_response(self, prompt, round_state):
+        response = self.call_claude_api(prompt, round_state, model=self.model_name)
         return response.content[0].text if response.content else ""
 
     def get_action_from_model(self, valid_actions, hole_card, round_state):
         prompt = self.create_action_prompt(valid_actions, hole_card, round_state)
-        response = self.call_claude_api(prompt, model=self.model_name)
+        response = self.call_claude_api(prompt, round_state, model=self.model_name)
         response_text = response.content[0].text if response.content else ""
         action = self.parse_action_response(response_text, valid_actions)
         return action
 
-    def call_claude_api(self, prompt, model):
+    def call_claude_api(self, prompt, round_state, model):
         anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
 
         client = anthropic.Anthropic(api_key=anthropic_api_key)
@@ -283,7 +290,7 @@ class ClaudePokerAgent(ModelPokerAgent):
             max_tokens=50,
             system=f"{self.personality_description}. You just took an action in the game. Respond with a brief message (1-2 sentences max) that is consistent with your action.",
             messages=[
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": f"Game state: {round_state}\n\n{prompt}"}
             ]
         )
 
@@ -344,18 +351,18 @@ Respond with one of the valid actions and an amount if necessary.
 
 # claude sonnet 3.5
 class ClaudeSonnet35PokerAgent(ModelPokerAgent):
-    def get_chat_response(self, prompt):
-        response = self.call_claude_api(prompt, model=self.model_name)
+    def get_chat_response(self, prompt, round_state):
+        response = self.call_claude_api(prompt, round_state, model=self.model_name)
         return response.content[0].text if response.content else ""
 
     def get_action_from_model(self, valid_actions, hole_card, round_state):
         prompt = self.create_action_prompt(valid_actions, hole_card, round_state)
-        response = self.call_claude_api(prompt, model=self.model_name)
+        response = self.call_claude_api(prompt, round_state, model=self.model_name)
         response_text = response.content[0].text if response.content else ""
         action = self.parse_action_response(response_text, valid_actions)
         return action
 
-    def call_claude_api(self, prompt, model):
+    def call_claude_api(self, prompt, round_state, model):
         anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
 
         client = anthropic.Anthropic(api_key=anthropic_api_key)
@@ -365,7 +372,7 @@ class ClaudeSonnet35PokerAgent(ModelPokerAgent):
             max_tokens=50,
             system=f"{self.personality_description}. You just took an action in the game. Respond with a brief message (1-2 sentences max) that is consistent with your action.",
             messages=[
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": f"Game state: {round_state}\n\n{prompt}"}
             ]
         )
 

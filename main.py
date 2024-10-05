@@ -79,8 +79,18 @@ def main():
     gui.show()
 
     def run_game():
+        class WrappedConfig:
+            def __init__(self, config):
+                self.config = config
+                self.players = [player for player in config.players_info]
+
+            def __getattr__(self, attr):
+                return getattr(self.config, attr)
+
+        wrapped_config = WrappedConfig(config)
+
         game_result = start_poker(
-            config,
+            wrapped_config,
             verbose=1
         )
         gui.gui_queue.put(('game_state', {

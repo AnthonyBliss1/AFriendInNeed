@@ -1,6 +1,6 @@
 # Poker AI Project
 
-This project is a poker game between three AI agents: GPT 4o, Claude Opus, and Claude Sonnet with defined 'personality' traits. Future versiosn will use finetuned models.
+This project is a poker game between three AI agents: GPT 4o, Claude Opus, and Claude Sonnet with defined 'personality' traits. Will test finetuning for future versions.
 
 ## Features
 
