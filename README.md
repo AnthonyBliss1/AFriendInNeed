@@ -33,4 +33,5 @@ python main.py
 ## Citations
 
 Using PyPokerEngine: https://github.com/rohan-paul/PyPokerEngine
+
 And GUI elements from Poker: https://github.com/allenfrostline/Poker.git
